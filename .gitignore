@@ -1,0 +1,15 @@
+#IDE code
+**/.idea
+**/.vscode
+
+#dotenv file, which contains my credit card, home PC password, information about where i hiding my milk collection and much more
+__pycache__
+*.env
+
+# i wanna to do make it go speed
+**/Cargo**
+/src
+
+# Added by cargo
+
+/target
