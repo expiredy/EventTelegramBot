@@ -43,6 +43,7 @@ class BotClient:
         self.__database_session.close_connection()
         self.__session_active = False
 
+    '''Method, which is calling every tick of main life cycle for executing real time events checking and responding'''
     async def __update(self):
         update_log = get_api_response(method_name="getUpdates",
                                       parametrs_dict={"allowed_updates": UPDATING_EVENTS_LIST}).json()
