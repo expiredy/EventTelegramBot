@@ -85,12 +85,15 @@ class BotClient:
     '''Method, which is calling every tick of main life cycle for executing real time events checking and responding'''
     async def __update(self):
         async def process_command_message(command_text: str) -> None:
+            if command_text["text"]
+
             raise Exception
 
         async def process_common_message(message_data: str) -> None:
-            if "анекдот" in message_data["text"].lower():
+            if "анекдот" in message_data[MESSAGE_TEXT_KEY].lower():
                 await self.__send_message({message_data["from"]["id"]},
                                            requests.get('http://rzhunemogu.ru/RandJSON.aspx?CType=1').text[12:-2])
+            await self.__send_message({message_data["from"]["id"]})
 
         update_log = get_api_response(request_method=requests.post,
                                       method_name="getUpdates",
@@ -166,7 +169,6 @@ class BotClient:
     def __load_last_session_progress(self, variable_key: str):
         import pickle
         return pickle.load(open(self.__configuration_file_path, "rb"))[variable_key]
-
 
 
 
