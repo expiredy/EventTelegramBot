@@ -5,10 +5,15 @@ from typing import Final
 DATABASE_TABLE_NAME_KEY: Final = "NAME"
 DATABASE_TABLE_PARAMETERS_STRUCTURE_KEY: Final = "PARAMETERS_STRUCTURE"
 
+USERS_DATABASE_NAME: Final = "users"
+USERS_ROLES_DATABASE_NAME: Final = "users_role"
+EVENTS_DATABASE_NAME: Final = "events"
+USERS_GROUPS_DATABASE_NAME: Final = "users_groups"
+
 DATABASES_STRUCTURE_BLUEPRINTS = [
     {
     DATABASE_TABLE_NAME_KEY:
-        "users", 
+        USERS_DATABASE_NAME, 
     DATABASE_TABLE_PARAMETERS_STRUCTURE_KEY: 
         '''
         (
@@ -22,7 +27,7 @@ DATABASES_STRUCTURE_BLUEPRINTS = [
 
     {
     DATABASE_TABLE_NAME_KEY:
-        "users_roles",
+        USERS_ROLES_DATABASE_NAME,
     DATABASE_TABLE_PARAMETERS_STRUCTURE_KEY:
         '''
         (
@@ -38,7 +43,7 @@ DATABASES_STRUCTURE_BLUEPRINTS = [
 
     {
     DATABASE_TABLE_NAME_KEY:
-        "events",
+        EVENTS_DATABASE_NAME,
     DATABASE_TABLE_PARAMETERS_STRUCTURE_KEY:
         '''
         (
@@ -55,7 +60,7 @@ DATABASES_STRUCTURE_BLUEPRINTS = [
         '''
     }, 
     {DATABASE_TABLE_NAME_KEY:
-        "users_groups",
+        USERS_GROUPS_DATABASE_NAME,
     DATABASE_TABLE_PARAMETERS_STRUCTURE_KEY:
         '''
         (
@@ -91,12 +96,19 @@ class DatabaseClient:
         self.database_connection.commit()
         self.database_connection.close()
 
-    def check_for_new_user(self, user_telegram_id: int):
-        #Checking is there a dataframe in db with current user id
-        pass
+    def check_for_user(self, user_chat_id: int):
+        return any(self.database_cursor.execute(
+                   f"""
+                   SELECT telegram_id FROM {USERS_DATABASE_NAME} WHERE telegram_id = {user_chat_id}
+                   """
+                   ).fetchall())
 
     def check_access_level(self, user_telegram_id: int, access_parameter: str) -> bool:
-        self.database_cursor.execute("SELECT FROM users")
+        try:
+            current_user_access_role_id = self.database_cursor.execute(f"""SELECT telegram_id FROM {USERS_DATABASE_NAME} WHERE telegram_id = {user_telegram_id}""")
+            self.database_cursor.execute(f"""SELECT {access_parameter}, id FROM WHERE id = {current_user_access_role_id}""")
+        except sqlite3.OperationalError:
+            return False
 
     def __check_need_for_initialization(self) -> bool:
         return not any(self.database_cursor.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall())
@@ -118,4 +130,5 @@ class DatabaseClient:
 if __name__ == "__main__":
     test_database = DatabaseClient("./database/bot_data.db", active_debug_mode=True)
     debug_log(test_database)
+    print(test_database.check_for_user(847751506))
     test_database.close_connection()

@@ -20,8 +20,11 @@ TELEGRAM_BOT_TOKEN = getenv('TELEGRAM_BOT_TOKEN')
 DEFAULT_CONFIGURATION_FILE_PATH = getenv('DEFAULT_CONFIGURATION_FILE_PATH')
 
 
-#Bot configuration variables keys
+#Bot configuration variables
 LAST_HANDLED_UPDATE_ID_KEY = "LAST_HANDLED_UPDATE_ID"
+
+MAX_CHECKING_EVENTS = 10
+
 
 # API configuration
 UPDATING_EVENTS_LIST = ["message"]
@@ -37,7 +40,7 @@ class BotClient:
     __session_active = bool
     __database_session = DatabaseClient
     
-    __event_pool = list
+    __events_pool = list
     __running_sessions_pool = dict
     __active_commands_array = dict
 
@@ -50,9 +53,11 @@ class BotClient:
         self.__session_active = True
         self.__database_session = database_session
 
-        self.__event_pool = []
+        self.__events_pool = []
         self.__running_sessions_pool = {}
-        self.__active_commands_array = {"/add": self.__add_new_event,
+        self.__active_commands_array = {"/start": None,
+                                        "/send": None,
+                                        "/add": self.__add_new_event,
                                         "/edit": None,
                                         "/del": None,
                                         "/wait": None,
@@ -97,21 +102,22 @@ class BotClient:
         async def process_command_message(command_entity: dict) -> None:
             if len(command_entity["entities"]) == 1 and command_entity["entities"][0]["type"] == "bot_command":
                 if command_entity["from"]["id"] not in list(self.__running_sessions_pool.keys()):
-                    self.__active_commands_array[command_entity["text"]](command_entity)
+                    await self.__active_commands_array[command_entity["text"]](command_entity)
                     return
 
             raise Exception
 
         async def process_common_message(message_data: dict) -> None:
+            #TODO: Add a check of allowing sending messages for current user  
             if message_data["from"]["id"] in list(self.__running_sessions_pool.keys()):
                 if not self.__running_sessions_pool[message_data["from"]["id"]].message_text:
                     self.__running_sessions_pool[message_data["from"]["id"]].message_text = message_data["text"]
-                elif self.__running_sessions_pool[message_data["from"]]["id"].add_user(message_data["text"]):
-                    pass
+                # elif not self.__running_sessions_pool[message_data["from"]]["id"].add_user(message_data["text"]):
+                #     await self.__send_message(message_data["from"]["id"], f'Неудалось найти аккаунт с ником "{message_data["text"]}"')
             
 
             elif any(joke_trigger in message_data[MESSAGE_TEXT_KEY].lower() for joke_trigger in ["анекдот", "шутка"]):
-                if any(joke_trigger in message_data[MESSAGE_TEXT_KEY].lower() for joke_trigger in ["пожалуйста", "пж", "пжшка", "пжлста", "пжлст"]):
+                if any(joke_trigger in message_data[MESSAGE_TEXT_KEY].lower() for joke_trigger in ["пожалуйста", "пж ", " пж", "пжшка", "пжлста", "пжлст"]):
                     await self.__send_message({message_data["from"]["id"]},
                                                requests.get('http://rzhunemogu.ru/RandJSON.aspx?CType=1').text[12:-2])
                 else:
@@ -129,9 +135,10 @@ class BotClient:
                 if update_event["update_id"] <= self.__last_handled_update_event_id or\
                      not MESSAGE_TEXT_KEY in list(update_event[MESSAGE_DATA_KEY].keys()):
                     continue
-                debug_log(update_event[MESSAGE_DATA_KEY]["text"], " /*sended from*/ ",
+                debug_log(update_event[MESSAGE_DATA_KEY]["text"], "\n /*sended from*/ ",
                           update_event[MESSAGE_DATA_KEY]["from"]["first_name"], " ",
-                          update_event[MESSAGE_DATA_KEY]["from"]["last_name"])
+                          update_event[MESSAGE_DATA_KEY]["from"]["last_name"], " id :",
+                          update_event[MESSAGE_DATA_KEY]["from"]["id"], "\n")
                 try:
                     await process_command_message(update_event[MESSAGE_DATA_KEY])
                 except:
@@ -160,15 +167,34 @@ class BotClient:
     '''
     User events
     '''
+
+    async def register_user(self, new_user_id: int):
+        self.__database_session.add_new_user(new_user_id)
+        pass
+    
+
     async def __login_user(self):
         pass
 
-    
+    async def add_user(self, username: str):
+        if not username.startswith("@"):
+            username =  "@" + username 
+        try:
+            chat_id = get_api_response(method_name="getChat", parameters_dict={"chat_id": username})
+            if self.__database_session.check_for_user(chat_id):
+                pass
+        except requests.exceptions.RequestException:
+            debug_log(f"error, getting id by username: {username}")
+            pass
+
+
     '''
     Commands handlers
     '''
-    async def __add_new_event(self):
-        pass
+    async def __add_new_event(self, message_data):
+        print("event added")
+        self.__running_sessions_pool[message_data["from"]["id"]] = EventDataSession()
+        await self.__send_message({message_data["from"]["id"]}, "Отправьте сообщение, которое вы хотите отправить")
 
     async def __edit_event(self):
         pass
@@ -179,14 +205,16 @@ class BotClient:
     ''' 
     async def __check_for_passed_events(self):
         current_time_point = datetime.now()
-        for event_date in self.__event_pool:
-            pass
+        for event_data_index in range(len(self.__events_pool)):
+            if self.__events_pool[event_data_index]["time"] < current_time_point:
+                pass
+
+                del self.__events_pool[event_data_index]
+        self.__events_pool_update()
 
     def __events_pool_update(self):
-        pass
-
-    async def __check_for_ended_timers(self):
-        pass
+        for new_event_index in range(MAX_CHECKING_EVENTS - len(self.__events_pool)):
+            pass
 
     '''
     hints for pings
@@ -219,25 +247,18 @@ class EventDataSession:
     def set_invite_text(self, message_text: str):
         self.message_text = message_text
 
-    async def add_user(self, username: str) -> bool:
-        if not username.startswith("@"):
-            username =  "@" + username 
-        try:
-            self.invited_users.add(get_api_response(method_name="getChat", parameters_dict={"chat_id": username}))
-            return True
-        except requests.exceptions.RequestException:
-            return False
 
     def set_timer(self, time_inaccuracies: str):
         pass
 
 
 
-def message_preprocessor():
-    pass
+def message_preprocessor(processing_text: str) -> str:
+    processing_text = " ".join(processing_text.split()).lower()
+    return processing_text
 
 
-def get_api_response(request_method: Callable = requests.get, method_name: str = "getMe", parameters_dict: dict = {}):
+def get_api_response(request_method: Callable = requests.get, method_name: str = "getMe", parameters_dict: dict = {}) -> dict:
     try:
         return request_method(str(API_URL + TELEGRAM_BOT_TOKEN + "/" + method_name), params=parameters_dict).json()
     except requests.exceptions.ConnectionError:
