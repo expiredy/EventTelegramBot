@@ -1,3 +1,4 @@
+# from calendar import c, month
 from os import getenv
 from dotenv import load_dotenv
 load_dotenv(".env")
@@ -55,13 +56,21 @@ class BotClient:
 
         self.__events_pool = []
         self.__running_sessions_pool = {}
-        self.__active_commands_array = {"/start": None,
-                                        "/send": None,
-                                        "/add": self.__add_new_event,
+        self.__active_commands_array = {"/start": self.__register_user, #Starting command for new users, which will have behavior of "/help" command, if user is already logged in
+                                        "/help": self.__send_help_message,  #Command for showcase of all available commands and mechanics of bot
+
+                                        "/send": self.__fast_event_send, #Shortcut for sending events to groups and users
+                                        "/add": self.__add_new_event, #Event planner
+                                        "/ready":  self.__set_user_event_to_upload, #After everything about the event is set, it is a time to upload it into database
+
                                         "/edit": None,
                                         "/del": None,
                                         "/wait": None,
                                         "/resume": None, 
+
+                                        "/create_group": None,
+
+
                                         "/create_pool": None}
 
         self.__configuration_file_path = configuration_file_path
@@ -100,23 +109,27 @@ class BotClient:
     '''Method, which is calling every tick of main life cycle for executing real time events checking and responding'''
     async def __update(self):
         async def process_command_message(command_entity: dict) -> None:
+            print(command_entity)
             if len(command_entity["entities"]) == 1 and command_entity["entities"][0]["type"] == "bot_command":
-                if command_entity["from"]["id"] not in list(self.__running_sessions_pool.keys()):
                     await self.__active_commands_array[command_entity["text"]](command_entity)
+                # if command_entity["from"]["id"] not in list(self.__running_sessions_pool.keys()):
                     return
 
             raise Exception
+        async def process_event_content(message_data: dict) -> None:
+            if self.__running_sessions_pool[message_data["from"]["id"]].message_text is str:   
+               self.__running_sessions_pool[message_data["from"]["id"]].set_invite_text(message_data[MESSAGE_TEXT_KEY]) 
+               await self.__send_message(message_data["from"]["id"], "Отправьте название группы, к которой вы хотите подвязать это событие")
+            elif self.__running_sessions_pool[message_data["from"]["id"]].users_recording_flag:
+                for user_tag in message_data["text"].replace(" ", "").split("@"):
+                    self.__running_sessions_pool[message_data["from"]["id"]].invited_users.add(self.__add_user(user_tag))
+                    
+                
 
         async def process_common_message(message_data: dict) -> None:
-            #TODO: Add a check of allowing sending messages for current user  
-            if message_data["from"]["id"] in list(self.__running_sessions_pool.keys()):
-                if not self.__running_sessions_pool[message_data["from"]["id"]].message_text:
-                    self.__running_sessions_pool[message_data["from"]["id"]].message_text = message_data["text"]
-                # elif not self.__running_sessions_pool[message_data["from"]]["id"].add_user(message_data["text"]):
-                #     await self.__send_message(message_data["from"]["id"], f'Неудалось найти аккаунт с ником "{message_data["text"]}"')
-            
+            #TODO: Add a check of allowing sending messages for current user             
 
-            elif any(joke_trigger in message_data[MESSAGE_TEXT_KEY].lower() for joke_trigger in ["анекдот", "шутка"]):
+            if any(joke_trigger in message_data[MESSAGE_TEXT_KEY].lower() for joke_trigger in ["анекдот", "шутка"]):
                 if any(joke_trigger in message_data[MESSAGE_TEXT_KEY].lower() for joke_trigger in ["пожалуйста", "пж ", " пж", "пжшка", "пжлста", "пжлст"]):
                     await self.__send_message({message_data["from"]["id"]},
                                                requests.get('http://rzhunemogu.ru/RandJSON.aspx?CType=1').text[12:-2])
@@ -136,13 +149,15 @@ class BotClient:
                      not MESSAGE_TEXT_KEY in list(update_event[MESSAGE_DATA_KEY].keys()):
                     continue
                 debug_log(update_event[MESSAGE_DATA_KEY]["text"], "\n /*sended from*/ ",
-                          update_event[MESSAGE_DATA_KEY]["from"]["first_name"], " ",
-                          update_event[MESSAGE_DATA_KEY]["from"]["last_name"], " id :",
+                          update_event[MESSAGE_DATA_KEY]["from"]["first_name"], " id :",
                           update_event[MESSAGE_DATA_KEY]["from"]["id"], "\n")
                 try:
                     await process_command_message(update_event[MESSAGE_DATA_KEY])
                 except:
-                    await process_common_message(update_event[MESSAGE_DATA_KEY])
+                    if update_event[MESSAGE_DATA_KEY]["from"]["id"] in self.__running_sessions_pool:
+                        await process_event_content(update_event[MESSAGE_DATA_KEY])
+                    else:
+                        await process_common_message(update_event[MESSAGE_DATA_KEY])
 
             #Logging processed requests 
             self.__last_handled_update_event_id = update_event["update_id"]
@@ -159,52 +174,81 @@ class BotClient:
             debug_log(update_event)
             logging.exception("message")
     
-    async def __send_message(self, sending_to_chat_ids_set: set, message: str):
-        request_data = {'chat_id': sending_to_chat_ids_set, 'text': message}
+    async def __send_message(self, sending_to_chat_ids_set: set, message: str, reply_markup_object: dict = {}):
+        request_data = {'chat_id': sending_to_chat_ids_set, 'text': message, 'reply_markup': reply_markup_object}
         response = get_api_response(requests.post, "sendMessage", request_data)
         debug_log("response ", response["ok"])
 
     '''
     User events
     '''
-
-    async def register_user(self, new_user_id: int):
-        self.__database_session.add_new_user(new_user_id)
-        pass
-    
-
     async def __login_user(self):
         pass
 
-    async def add_user(self, username: str):
+    def __add_user(self, username: str) -> int:
         if not username.startswith("@"):
             username =  "@" + username 
         try:
-            chat_id = get_api_response(method_name="getChat", parameters_dict={"chat_id": username})
-            if self.__database_session.check_for_user(chat_id):
-                pass
+            debug_log(username)
+            chat_id = get_api_response(method_name="getChatMember", parameters_dict={"chat_id": username})
+            debug_log("chat id: ", chat_id)
+            if  self.__database_session.check_for_user(chat_id):
+                return chat_id
         except requests.exceptions.RequestException:
             debug_log(f"error, getting id by username: {username}")
             pass
 
 
     '''
-    Commands handlers
+    Default commands handlers
     '''
-    async def __add_new_event(self, message_data):
-        print("event added")
+    
+    async def __register_user(self, new_user_message: dict):
+
+        if not self.__database_session.check_for_user(new_user_message["from"]["id"]):
+            self.__database_session.add_new_user(new_user_message["from"]["id"], 0)
+        else:
+            await self.__send_help_message(new_user_message, preface="Вы уже зарегистрированы в системе, вот небольшая справака о доступных командах")
+
+    
+    async def __fast_event_send(self, command_data: dict):
+        if command_data["from"]["id"] in self.__running_sessions_pool:
+            await self.__send_message(command_data["from"]["id"], "Вы уже и так создаёте событие")
+        self.__running_sessions_pool[command_data["from"]["id"]] = EventDataSession()
+        await self.__send_message(command_data["from"]["id"], "Отправьте текст приглашания, которое вы хотите разослать")
+
+
+    async def __add_new_event(self, message_data: dict):
+        debug_log("event added")
         self.__running_sessions_pool[message_data["from"]["id"]] = EventDataSession()
         await self.__send_message({message_data["from"]["id"]}, "Отправьте сообщение, которое вы хотите отправить")
 
-    async def __edit_event(self):
-        pass
+
+    async def __choose_date(self, user_id: int, callaback_action_index: int = 0):
+        def genereate_calendar(month_skip_count):
+            from datetime import timedelta
+            current_date = get_current_time_point() +  timedelta(month=month_skip_count)
+
+        await self.__send_message(user_id, "Choose a date of your event:", reply_markup_object=genereate_calendar())
+
+
+    async def __set_user_event_to_upload(self, user_message):
+        for user_chat_id in self.__running_sessions_pool[user_message["from"]["id"]].invited_users.items():
+            await self.__send_message(user_chat_id,
+                                    self.__running_sessions_pool[user_message["from"]["id"]].message_text)
+            debug_log(f'Message was sent to: {user_chat_id}')
+        await self.__send_message(self.user_message["from"]["id"], "Всё отправлено)")
+
+    async def __send_help_message(self, user_command, preface: str = ""):
+        await self.__send_message(user_command["from"]["id"], preface + "\n" + self.__get_functionality_help_message())
+
 
 
     '''
-    events, for sending
+    events processing methods
     ''' 
     async def __check_for_passed_events(self):
-        current_time_point = datetime.now()
+        current_time_point = get_current_time_point()
         for event_data_index in range(len(self.__events_pool)):
             if self.__events_pool[event_data_index]["time"] < current_time_point:
                 pass
@@ -225,7 +269,17 @@ class BotClient:
     def __set_users_groups_as_hints(self):
         pass
 
-    # data saving things
+    
+    '''
+    Message generators
+    '''
+    def __get_functionality_help_message(self) -> str:
+        return "Тебе никто не поможет\nНа самом деле это шутка, просто пока эта команда не работает"
+
+
+    '''
+    data saving things
+    '''
     def __upload_session_progress(self, data_dict: dict):
         import pickle
         pickle.dump(data_dict, open(self.__configuration_file_path, "wb"))
@@ -238,19 +292,23 @@ class BotClient:
 class EventDataSession:
     message_text = str
     invited_users = set
-    current_creation_state = Callable
+    users_recording_flag = False
 
     def __init__(self):
         self.invited_users = set()
-        self.current_registration_state = self.add_user
 
     def set_invite_text(self, message_text: str):
         self.message_text = message_text
+        self.users_recording_flag = True
 
+    def get_all_invited_users(self) -> set:
+        return self.invited_users
 
     def set_timer(self, time_inaccuracies: str):
         pass
 
+def get_current_time_point():
+    return datetime.now()
 
 
 def message_preprocessor(processing_text: str) -> str:
