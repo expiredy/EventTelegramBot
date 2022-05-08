@@ -35,6 +35,10 @@ RESULT_DATA_KEY = "result"
 MESSAGE_DATA_KEY = "message"
 MESSAGE_TEXT_KEY = "text"
 
+USERNAME_STARTING_SYMBOL = "@"
+
+
+
 #main bot client class
 class BotClient:
     active_users_profile = dict
@@ -91,7 +95,6 @@ class BotClient:
         debug_log(responce)
         self.enter_debug_mode()
 
-    
     def run(self):
         while self.__session_active:
             try:
@@ -112,18 +115,28 @@ class BotClient:
             print(command_entity)
             if len(command_entity["entities"]) == 1 and command_entity["entities"][0]["type"] == "bot_command":
                     await self.__active_commands_array[command_entity["text"]](command_entity)
-                # if command_entity["from"]["id"] not in list(self.__running_sessions_pool.keys()):
                     return
+            elif self.__running_sessions_pool[command_entity["from"]["id"]].users_recording_flag and command_entity["entities"][0]["type"] == "mention":
+                 for user_tag in command_entity["text"].replace(" ", "").split(USERNAME_STARTING_SYMBOL):
+                    if user_tag == "":
+                        continue
+                    try:
+                        self.__running_sessions_pool[command_entity["from"]["id"]].invited_users.add(self.__add_user_to_event(user_tag))
+                    except Exception:
+                        logging.exception("message")
+                        await self.__send_message(command_entity["from"]["id"], "Простите, но не удалось найти человека с ником @" + user_tag )
 
             raise Exception
+
         async def process_event_content(message_data: dict) -> None:
             if self.__running_sessions_pool[message_data["from"]["id"]].message_text is str:   
                self.__running_sessions_pool[message_data["from"]["id"]].set_invite_text(message_data[MESSAGE_TEXT_KEY]) 
                await self.__send_message(message_data["from"]["id"], "Отправьте название группы, к которой вы хотите подвязать это событие")
             elif self.__running_sessions_pool[message_data["from"]["id"]].users_recording_flag:
-                for user_tag in message_data["text"].replace(" ", "").split("@"):
-                    self.__running_sessions_pool[message_data["from"]["id"]].invited_users.add(self.__add_user(user_tag))
-                    
+                try: 
+                    response = self.__database_session.get_users_from_group(message_data["text"])
+                except Exception:
+                    await self.__send_message(message_data["from"]["id"], "Простите, но не удалось найти группу с названием " + message_data["text"])
                 
 
         async def process_common_message(message_data: dict) -> None:
@@ -185,15 +198,15 @@ class BotClient:
     async def __login_user(self):
         pass
 
-    def __add_user(self, username: str) -> int:
-        if not username.startswith("@"):
-            username =  "@" + username 
+    def __add_user_to_event(self, username: str) -> int:           
         try:
             debug_log(username)
-            chat_id = get_api_response(method_name="getChatMember", parameters_dict={"chat_id": username})
-            debug_log("chat id: ", chat_id)
-            if  self.__database_session.check_for_user(chat_id):
-                return chat_id
+            user_chat_id = self.__database_session.get_user_id_by_username(username)
+            debug_log("chat id: ", user_chat_id)
+            if  self.__database_session.check_for_user(user_chat_id):
+                return user_chat_id
+            else:
+                raise Exception
         except requests.exceptions.RequestException:
             debug_log(f"error, getting id by username: {username}")
             pass
@@ -206,7 +219,7 @@ class BotClient:
     async def __register_user(self, new_user_message: dict):
 
         if not self.__database_session.check_for_user(new_user_message["from"]["id"]):
-            self.__database_session.add_new_user(new_user_message["from"]["id"], 0)
+            self.__database_session.add_new_user(new_user_message["from"]["id"], new_user_message["from"]["username"], 0)
         else:
             await self.__send_help_message(new_user_message, preface="Вы уже зарегистрированы в системе, вот небольшая справака о доступных командах")
 
