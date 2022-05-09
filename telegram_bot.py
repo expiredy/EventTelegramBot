@@ -1,4 +1,5 @@
-# from calendar import c, month
+"""TODO: write total scenerio for all interactions with client.
+   TODO: move all bot's lines into a separate file for more flexable interactions and editing"""
 from os import getenv
 from dotenv import load_dotenv
 load_dotenv(".env")
@@ -40,6 +41,8 @@ USERNAME_STARTING_SYMBOL = "@"
 
 
 #main bot client class
+
+
 class BotClient:
     active_users_profile = dict
     __session_active = bool
@@ -91,11 +94,15 @@ class BotClient:
 
     '''Test'''
     def test_connection(self):
-        responce = get_api_response()
-        debug_log(responce)
-        self.enter_debug_mode()
+        try:
+            responce = get_api_response()
+            debug_log(responce)
+            self.enter_debug_mode()
+        except:
+            self.stop_server()
 
     def run(self):
+        debug_log("Server has been started")
         while self.__session_active:
             try:
                 asyncio.run(self.__update())
@@ -114,10 +121,10 @@ class BotClient:
         async def process_command_message(command_entity: dict) -> None:
             print(command_entity)
             if len(command_entity["entities"]) == 1 and command_entity["entities"][0]["type"] == "bot_command":
-                    await self.__active_commands_array[command_entity["text"]](command_entity)
-                    return
+                await self.__active_commands_array[command_entity["text"]](command_entity)
+                return
             elif self.__running_sessions_pool[command_entity["from"]["id"]].users_recording_flag and command_entity["entities"][0]["type"] == "mention":
-                 for user_tag in command_entity["text"].replace(" ", "").split(USERNAME_STARTING_SYMBOL):
+                for user_tag in command_entity["text"].replace(" ", "").split(USERNAME_STARTING_SYMBOL):
                     if user_tag == "":
                         continue
                     try:
@@ -125,6 +132,7 @@ class BotClient:
                     except Exception:
                         logging.exception("message")
                         await self.__send_message(command_entity["from"]["id"], "Простите, но не удалось найти человека с ником @" + user_tag )
+                return
 
             raise Exception
 
@@ -149,7 +157,7 @@ class BotClient:
                 else:
                     await self.__send_message({message_data["from"]["id"]}, "А можно повежливее?")
                 return
-            await self.__send_message({message_data["from"]["id"]}, "Sorry, don't get it, is this a joke?")
+            await self.__send_message({message_data["from"]["id"]}, "Немного не понял, простите, пожалуйста")
 
         update_log = get_api_response(request_method=requests.post,
                                       method_name="getUpdates",
@@ -187,7 +195,14 @@ class BotClient:
             debug_log(update_event)
             logging.exception("message")
     
-    async def __send_message(self, sending_to_chat_ids_set: set, message: str, reply_markup_object: dict = {}):
+    async def __send_message(self, sending_to_chat_ids_set: set, message: str, reply_markup_object: dict = {}, signature_username: str = None):
+        def get_signatured_message():
+            return "Сообщение было отправлено " + signature_username + "\n" + message 
+        
+        
+        if signature_username:
+            messages = get_signatured_message()
+
         request_data = {'chat_id': sending_to_chat_ids_set, 'text': message, 'reply_markup': reply_markup_object}
         response = get_api_response(requests.post, "sendMessage", request_data)
         debug_log("response ", response["ok"])
@@ -246,10 +261,14 @@ class BotClient:
 
 
     async def __set_user_event_to_upload(self, user_message):
-        for user_chat_id in self.__running_sessions_pool[user_message["from"]["id"]].invited_users.items():
-            await self.__send_message(user_chat_id,
-                                    self.__running_sessions_pool[user_message["from"]["id"]].message_text)
-            debug_log(f'Message was sent to: {user_chat_id}')
+        for user_chat_id in self.__running_sessions_pool[user_message["from"]["id"]].invited_users:
+            try:
+                await self.__send_message(user_chat_id,
+                                        self.__running_sessions_pool[user_message["from"]["id"]].message_text, signature_username=user_message["from"]["username"])
+                debug_log(f'Message was sent to: {user_chat_id}')
+            except:
+                debug_log(f'Message was NOT sent to: {user_chat_id}')
+
         await self.__send_message(self.user_message["from"]["id"], "Всё отправлено)")
 
     async def __send_help_message(self, user_command, preface: str = ""):
@@ -300,6 +319,10 @@ class BotClient:
     def __load_last_session_progress(self, variable_key: str):
         import pickle
         return pickle.load(open(self.__configuration_file_path, "rb"))[variable_key]
+
+
+class EventManagerBotClient(BotClient):
+    pass
 
 
 class EventDataSession:
