@@ -119,7 +119,6 @@ class BotClient:
     '''Method, which is calling every tick of main life cycle for executing real time events checking and responding'''
     async def __update(self):
         async def process_command_message(command_entity: dict) -> None:
-            print(command_entity)
             if len(command_entity["entities"]) == 1 and command_entity["entities"][0]["type"] == "bot_command":
                 await self.__active_commands_array[command_entity["text"]](command_entity)
                 return
@@ -139,10 +138,13 @@ class BotClient:
         async def process_event_content(message_data: dict) -> None:
             if self.__running_sessions_pool[message_data["from"]["id"]].message_text is str:   
                self.__running_sessions_pool[message_data["from"]["id"]].set_invite_text(message_data[MESSAGE_TEXT_KEY]) 
-               await self.__send_message(message_data["from"]["id"], "Отправьте название группы, к которой вы хотите подвязать это событие")
-            elif self.__running_sessions_pool[message_data["from"]["id"]].users_recording_flag:
+               await self.__send_message(message_data["from"]["id"], "Отправьте название группы, к которой вы хотите подвязать это событие или введите ники пользователей!\nКогда всё будет готово введите команду /ready")
+            elif self.__running_sessions_pool[message_data["from"]["id"]].users_recording_flag and\
+                 ("entities" not in message_data or message_data["entities"][0]["type"] != "bot_command"):
                 try: 
                     response = self.__database_session.get_users_from_group(message_data["text"])
+                    self.__running_sessions_pool[message_data["from"]["id"]].invited_users.update(response)
+                    debug_log(self.__running_sessions_pool[message_data["from"]["id"]].invited_users)
                 except Exception:
                     await self.__send_message(message_data["from"]["id"], "Простите, но не удалось найти группу с названием " + message_data["text"])
                 
@@ -196,12 +198,13 @@ class BotClient:
             logging.exception("message")
     
     async def __send_message(self, sending_to_chat_ids_set: set, message: str, reply_markup_object: dict = {}, signature_username: str = None):
-        def get_signatured_message():
+        def get_signatured_message(message):
             return "Сообщение было отправлено " + signature_username + "\n" + message 
         
         
         if signature_username:
-            messages = get_signatured_message()
+            debug_log("Ready to be sent")
+            message = get_signatured_message(message)
 
         request_data = {'chat_id': sending_to_chat_ids_set, 'text': message, 'reply_markup': reply_markup_object}
         response = get_api_response(requests.post, "sendMessage", request_data)
@@ -261,15 +264,20 @@ class BotClient:
 
 
     async def __set_user_event_to_upload(self, user_message):
+        try:
+            self.__running_sessions_pool[user_message["from"]["id"]].invited_users.remove(user_message["from"]["id"])
+        except KeyError:
+            pass
+
         for user_chat_id in self.__running_sessions_pool[user_message["from"]["id"]].invited_users:
             try:
                 await self.__send_message(user_chat_id,
-                                        self.__running_sessions_pool[user_message["from"]["id"]].message_text, signature_username=user_message["from"]["username"])
+                                        self.__running_sessions_pool[user_message["from"]["id"]].message_text)
                 debug_log(f'Message was sent to: {user_chat_id}')
             except:
                 debug_log(f'Message was NOT sent to: {user_chat_id}')
 
-        await self.__send_message(self.user_message["from"]["id"], "Всё отправлено)")
+        await self.__send_message(user_message["from"]["id"], "Всё отправлено)")
 
     async def __send_help_message(self, user_command, preface: str = ""):
         await self.__send_message(user_command["from"]["id"], preface + "\n" + self.__get_functionality_help_message())
@@ -319,10 +327,6 @@ class BotClient:
     def __load_last_session_progress(self, variable_key: str):
         import pickle
         return pickle.load(open(self.__configuration_file_path, "rb"))[variable_key]
-
-
-class EventManagerBotClient(BotClient):
-    pass
 
 
 class EventDataSession:

@@ -135,6 +135,17 @@ class DatabaseClient:
             raise sqlite3.OperationalError
         return database_response[0][1]
 
+    def get_users_from_group(self, group_name: str) -> set: 
+        users_set = None
+        try: 
+            database_response = self.database_cursor.execute(f"""SELECT name, members FROM {USERS_GROUPS_DATABASE_NAME} WHERE name = '{group_name}'""").fetchall()
+            if len(database_response) != 1:
+                raise sqlite3.OperationalError
+            users_set = eval(database_response[0][-1])
+        except: 
+            debug_log("Error with getting group ", group_name)
+        return users_set
+
     def __check_need_for_initialization(self) -> bool:
         return not any(self.database_cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
         
