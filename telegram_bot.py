@@ -161,7 +161,6 @@ class BotClient:
                 return
             await self.__send_message({message_data["from"]["id"]}, "Немного не понял, простите, пожалуйста")
 
-
         update_log = get_api_response(request_method=requests.post,
                                       method_name="getUpdates",
                                       parameters_dict={"allowed_updates": UPDATING_EVENTS_LIST})
@@ -280,6 +279,7 @@ class BotClient:
 
         await self.__send_message(user_message["from"]["id"], "Всё отправлено)")
         self.__running_sessions_pool[user_message["from"]["id"]] = None
+
 
     async def __send_help_message(self, user_command, preface: str = ""):
         await self.__send_message(user_command["from"]["id"], preface + "\n" + self.__get_functionality_help_message())

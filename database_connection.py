@@ -128,7 +128,6 @@ class DatabaseClient:
         except sqlite3.OperationalError:
             return False
 
-
     def get_user_id_by_username(self, username: str) -> int:
         database_response = self.database_cursor.execute(f"""SELECT username, telegram_id FROM {USERS_DATABASE_NAME} WHERE username = '{username}'""").fetchall()
         debug_log("founded users: ", database_response)
@@ -146,7 +145,6 @@ class DatabaseClient:
         except: 
             debug_log("Error with getting group ", group_name)
         return users_set
-
 
     def __check_need_for_initialization(self) -> bool:
         return not any(self.database_cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
@@ -169,4 +167,5 @@ if __name__ == "__main__":
     test_database = DatabaseClient("./database/bot_data.db", active_debug_mode=True)
     debug_log("connected to: ", test_database)
     print(test_database.check_for_user(847751506))
+    print(test_database.get_user_id_by_username("NikitaTeletov"))
     test_database.close_connection()
