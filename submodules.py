@@ -8,7 +8,7 @@ class EntityController(Thread):
     def run(self):
         while self.active_session:
             command_text = input()
-
+    
 def debug_log(*parameters) -> None:
     print(*parameters)
 
