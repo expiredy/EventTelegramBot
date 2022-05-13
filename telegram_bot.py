@@ -118,6 +118,7 @@ class BotClient:
 
     '''Method, which is calling every tick of main life cycle for executing real time events checking and responding'''
     async def __update(self):
+
         async def process_command_message(command_entity: dict) -> None:
             if len(command_entity["entities"]) == 1 and command_entity["entities"][0]["type"] == "bot_command":
                 await self.__active_commands_array[command_entity["text"]](command_entity)
@@ -148,7 +149,6 @@ class BotClient:
                 except Exception:
                     await self.__send_message(message_data["from"]["id"], "Простите, но не удалось найти группу с названием " + message_data["text"])
                 
-
         async def process_common_message(message_data: dict) -> None:
             #TODO: Add a check of allowing sending messages for current user             
 
@@ -168,22 +168,22 @@ class BotClient:
             return
         try:
             for update_event in update_log[RESULT_DATA_KEY]:
-                if update_event["update_id"] <= self.__last_handled_update_event_id or\
-                     not MESSAGE_TEXT_KEY in list(update_event[MESSAGE_DATA_KEY].keys()):
+                if update_event["update_id"] <= self.__last_handled_update_event_id:
                     continue
-                debug_log(update_event[MESSAGE_DATA_KEY]["text"], "\n /*sended from*/ ",
-                          update_event[MESSAGE_DATA_KEY]["from"]["first_name"], " id :",
-                          update_event[MESSAGE_DATA_KEY]["from"]["id"], "\n")
-                try:
-                    await process_command_message(update_event[MESSAGE_DATA_KEY])
-                except:
-                    if update_event[MESSAGE_DATA_KEY]["from"]["id"] in self.__running_sessions_pool:
-                        await process_event_content(update_event[MESSAGE_DATA_KEY])
-                    else:
-                        await process_common_message(update_event[MESSAGE_DATA_KEY])
-
-            #Logging processed requests 
-            self.__last_handled_update_event_id = update_event["update_id"]
+                if MESSAGE_DATA_KEY in list(update_event.keys()) and MESSAGE_TEXT_KEY in list(update_event[MESSAGE_DATA_KEY].keys()):
+                    debug_log(update_event[MESSAGE_DATA_KEY]["text"], "\n /*sended from*/ ",
+                            update_event[MESSAGE_DATA_KEY]["from"]["first_name"], " id :",
+                            update_event[MESSAGE_DATA_KEY]["from"]["id"], "\n")
+                    try:
+                        await process_command_message(update_event[MESSAGE_DATA_KEY])
+                    except:
+                        if update_event[MESSAGE_DATA_KEY]["from"]["id"] in self.__running_sessions_pool:
+                            await process_event_content(update_event[MESSAGE_DATA_KEY])
+                        else:
+                            await process_common_message(update_event[MESSAGE_DATA_KEY])
+                    
+                #Logging processed requests 
+                self.__last_handled_update_event_id = update_event["update_id"]
 
 
 
@@ -278,6 +278,8 @@ class BotClient:
                 debug_log(f'Message was NOT sent to: {user_chat_id}')
 
         await self.__send_message(user_message["from"]["id"], "Всё отправлено)")
+        self.__running_sessions_pool[user_message["from"]["id"]] = None
+
 
     async def __send_help_message(self, user_command, preface: str = ""):
         await self.__send_message(user_command["from"]["id"], preface + "\n" + self.__get_functionality_help_message())
@@ -294,7 +296,7 @@ class BotClient:
                 pass
 
                 del self.__events_pool[event_data_index]
-        self.__events_pool_update()
+        self.__events_pool_update()_check_for_passed_events
 
     def __events_pool_update(self):
         for new_event_index in range(MAX_CHECKING_EVENTS - len(self.__events_pool)):
@@ -323,6 +325,7 @@ class BotClient:
     def __upload_session_progress(self, data_dict: dict):
         import pickle
         pickle.dump(data_dict, open(self.__configuration_file_path, "wb"))
+        debug_log("Everything is saved")
     
     def __load_last_session_progress(self, variable_key: str):
         import pickle

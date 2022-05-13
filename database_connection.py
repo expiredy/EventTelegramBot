@@ -16,7 +16,7 @@ DATABASES_STRUCTURE_BLUEPRINTS = [
     {
     DATABASE_TABLE_NAME_KEY:
         USERS_DATABASE_NAME, 
-    DATABASE_TABLE_PARAMETERS_STRUCTURE_KEY: 
+    DATABASE_TABLE_PARAMETERS_STRUCTURE_KEY:
         '''
         (
             telegram_id    BIGINT  PRIMARY KEY
@@ -32,7 +32,7 @@ DATABASES_STRUCTURE_BLUEPRINTS = [
         USERS_ROLES_DATABASE_NAME,
     DATABASE_TABLE_PARAMETERS_STRUCTURE_KEY:
         '''
-        (
+        (.
             id                      PRIMARY KEY
                                         NOT NULL,
             getting_response        BOOLEAN DEFAULT (true) 
