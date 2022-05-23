@@ -200,15 +200,24 @@ class BotClient:
     async def __send_message(self, sending_to_chat_ids_set: set, message: str, reply_markup_object: dict = {}, signature_username: str = None):
         def get_signatured_message(message):
             return "Сообщение было отправлено " + signature_username + "\n" + message 
+
+        def form_inline_keyboard_markup():
+            import json
+            reply_markup_object["inline_keyboard"] = [[{"text": "Sheeeesh"}]]
+            return json.dumps(reply_markup_object)
         
         
         if signature_username:
             debug_log("Ready to be sent")
             message = get_signatured_message(message)
 
+        reply_markup_object = form_inline_keyboard_markup()
+        print(reply_markup_object)
         request_data = {'chat_id': sending_to_chat_ids_set, 'text': message, 'reply_markup': reply_markup_object}
         response = get_api_response(requests.post, "sendMessage", request_data)
         debug_log("response ", response["ok"])
+        if not response["ok"]:
+            debug_log(response)
 
     '''
     User events
@@ -235,7 +244,6 @@ class BotClient:
     '''
     
     async def __register_user(self, new_user_message: dict):
-
         if not self.__database_session.check_for_user(new_user_message["from"]["id"]):
             self.__database_session.add_new_user(new_user_message["from"]["id"], new_user_message["from"]["username"], 0)
         else:
@@ -328,6 +336,24 @@ class BotClient:
         import pickle
         return pickle.load(open(self.__configuration_file_path, "rb"))[variable_key]
 
+
+'''Responding configuration classes'''
+
+class InlineKeyboardMarkupGenerator:
+
+
+    def __init__(self):
+        pass
+
+    def __create_new_markup(self):
+        formed_markup  = get_api_response("InlineKeyboardMarkup")
+
+    
+    def add_new_button(button_text: str):
+        button = get_api_response("KeyboardButton", parameters_dict={"text": button_text})
+
+
+'''Data classes'''
 
 class EventDataSession:
     message_text = str
