@@ -95,8 +95,8 @@ class BotClient:
     '''Test'''
     def test_connection(self):
         try:
-            responce = get_api_response()
-            debug_log(responce)
+            response = get_api_response()
+            debug_log(response)
             self.enter_debug_mode()
         except:
             self.stop_server()
@@ -132,7 +132,6 @@ class BotClient:
                         logging.exception("message")
                         await self.__send_message(command_entity["from"]["id"], "Простите, но не удалось найти человека с ником @" + user_tag )
                 return
-
             raise Exception
 
         async def process_event_content(message_data: dict) -> None:
@@ -161,12 +160,18 @@ class BotClient:
                 return
             await self.__send_message({message_data["from"]["id"]}, "Немного не понял, простите, пожалуйста")
 
+
+        async def callback_processor(message_data: dict) -> None:
+            for callback_data in message_data["callback_query"]:
+                pass
+
         update_log = get_api_response(request_method=requests.post,
                                       method_name="getUpdates",
                                       parameters_dict={"allowed_updates": UPDATING_EVENTS_LIST})
         if RESULT_DATA_KEY not in list(update_log.keys()) or not update_log[RESULT_DATA_KEY]:
             return
         try:
+            # handling 
             for update_event in update_log[RESULT_DATA_KEY]:
                 if update_event["update_id"] <= self.__last_handled_update_event_id or\
                      not MESSAGE_TEXT_KEY in list(update_event[MESSAGE_DATA_KEY].keys()):
@@ -203,7 +208,8 @@ class BotClient:
 
         def form_inline_keyboard_markup():
             import json
-            reply_markup_object["inline_keyboard"] = [[{"text": "Sheeeesh"}]]
+            # reply_markup_object["keyboard"] = [[]]
+            reply_markup_object["inline_keyboard"] = [[{'text': "Sheesh", 'callback_data': "AAA"}]]
             return json.dumps(reply_markup_object)
         
         
@@ -337,22 +343,9 @@ class BotClient:
         return pickle.load(open(self.__configuration_file_path, "rb"))[variable_key]
 
 
-'''Responding configuration classes'''
-
-class InlineKeyboardMarkupGenerator:
-
-
-    def __init__(self):
-        pass
-
-    def __create_new_markup(self):
-        formed_markup  = get_api_response("InlineKeyboardMarkup")
+'''Responding configuration classes'''  
 
     
-    def add_new_button(button_text: str):
-        button = get_api_response("KeyboardButton", parameters_dict={"text": button_text})
-
-
 '''Data classes'''
 
 class EventDataSession:
@@ -372,6 +365,15 @@ class EventDataSession:
 
     def set_timer(self, time_inaccuracies: str):
         pass
+
+
+class MainPanelGenerator:
+    def __init__(self):
+        pass
+
+    def __repr__(self):
+        pass
+
 
 def get_current_time_point():
     return datetime.now()
