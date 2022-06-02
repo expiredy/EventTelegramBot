@@ -139,7 +139,7 @@ class DatabaseClient:
         users_set = None
         try: 
             database_response = self.database_cursor.execute(f"""SELECT name, members FROM {USERS_GROUPS_DATABASE_NAME} WHERE name = '{group_name}'""").fetchall()
-            if len(database_response) != 1:
+            if len(database_response) != 1: 
                 raise sqlite3.OperationalError
             users_set = eval(database_response[0][-1])
         except: 

@@ -95,8 +95,8 @@ class BotClient:
     '''Test'''
     def test_connection(self):
         try:
-            responce = get_api_response()
-            debug_log(responce)
+            response = get_api_response()
+            debug_log(response)
             self.enter_debug_mode()
         except:
             self.stop_server()
@@ -133,7 +133,6 @@ class BotClient:
                         logging.exception("message")
                         await self.__send_message(command_entity["from"]["id"], "Простите, но не удалось найти человека с ником @" + user_tag )
                 return
-
             raise Exception
 
         async def process_event_content(message_data: dict) -> None:
@@ -161,12 +160,18 @@ class BotClient:
                 return
             await self.__send_message({message_data["from"]["id"]}, "Немного не понял, простите, пожалуйста")
 
+
+        async def callback_processor(message_data: dict) -> None:
+            for callback_data in message_data["callback_query"]:
+                pass
+
         update_log = get_api_response(request_method=requests.post,
                                       method_name="getUpdates",
                                       parameters_dict={"allowed_updates": UPDATING_EVENTS_LIST})
         if RESULT_DATA_KEY not in list(update_log.keys()) or not update_log[RESULT_DATA_KEY]:
             return
         try:
+            # handling 
             for update_event in update_log[RESULT_DATA_KEY]:
                 if update_event["update_id"] <= self.__last_handled_update_event_id:
                     continue
@@ -200,15 +205,25 @@ class BotClient:
     async def __send_message(self, sending_to_chat_ids_set: set, message: str, reply_markup_object: dict = {}, signature_username: str = None):
         def get_signatured_message(message):
             return "Сообщение было отправлено " + signature_username + "\n" + message 
+
+        def form_inline_keyboard_markup():
+            import json
+            # reply_markup_object["keyboard"] = [[]]
+            reply_markup_object["inline_keyboard"] = [[{'text': "Sheesh", 'callback_data': "AAA"}]]
+            return json.dumps(reply_markup_object)
         
         
         if signature_username:
             debug_log("Ready to be sent")
             message = get_signatured_message(message)
 
+        reply_markup_object = form_inline_keyboard_markup()
+        print(reply_markup_object)
         request_data = {'chat_id': sending_to_chat_ids_set, 'text': message, 'reply_markup': reply_markup_object}
         response = get_api_response(requests.post, "sendMessage", request_data)
         debug_log("response ", response["ok"])
+        if not response["ok"]:
+            debug_log(response)
 
     '''
     User events
@@ -235,7 +250,6 @@ class BotClient:
     '''
     
     async def __register_user(self, new_user_message: dict):
-
         if not self.__database_session.check_for_user(new_user_message["from"]["id"]):
             self.__database_session.add_new_user(new_user_message["from"]["id"], new_user_message["from"]["username"], 0)
         else:
@@ -332,6 +346,11 @@ class BotClient:
         return pickle.load(open(self.__configuration_file_path, "rb"))[variable_key]
 
 
+'''Responding configuration classes'''  
+
+    
+'''Data classes'''
+
 class EventDataSession:
     message_text = str
     invited_users = set
@@ -349,6 +368,15 @@ class EventDataSession:
 
     def set_timer(self, time_inaccuracies: str):
         pass
+
+
+class MainPanelGenerator:
+    def __init__(self):
+        pass
+
+    def __repr__(self):
+        pass
+
 
 def get_current_time_point():
     return datetime.now()
