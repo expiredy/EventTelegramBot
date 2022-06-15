@@ -224,7 +224,7 @@ class BotClient:
         debug_log("response ", response["ok"])
         if not response["ok"]:
             debug_log(response)
-
+        
     '''
     User events
     '''
@@ -310,7 +310,7 @@ class BotClient:
                 pass
 
                 del self.__events_pool[event_data_index]
-        self.__events_pool_update()_check_for_passed_events
+        self.__events_pool_update()
 
     def __events_pool_update(self):
         for new_event_index in range(MAX_CHECKING_EVENTS - len(self.__events_pool)):
@@ -371,12 +371,38 @@ class EventDataSession:
 
 
 class MainPanelGenerator:
+    total_markup = None
+
     def __init__(self):
         pass
+
+    def genereate_makrkup(self, width: int, height: int):
+        self.total_markup = [[PanelUnit() for _ in range(width)] for _ in range(height)]
+
+    def genereate_makrkup(self, markup_blueprint: list[list]):
+        for row in markup_blueprint:
+            pass
+
 
     def __repr__(self):
         pass
 
+
+class PanelUnit:
+    __name = str
+    __callback_data = str
+
+    def __init__(self, name: str = str, callback_data: str = str):
+        self.__name, self.__callback_data = name, callback_data
+        
+    def reinit_data(self, name : str = None, callback_data : str = None):
+        self.__name = name if not name is None else self.__name
+        self.__callback_data if not callback_data is None else self.__callback_data
+
+    def __repr__(self):
+        if self.__name and self.__callback_data:
+            return {"name": self.__name, "callback_data": self.__callback_data}
+        raise Exception("You are trying to send clear and uninited markup unit")
 
 def get_current_time_point():
     return datetime.now()
